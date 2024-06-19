@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+      <meta charset="UTF-8">
+      <title>webRTC Receiver</title>
+      <style>
+       body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            paddings: 0;
+           }
+
+        .video-container {
+             display: flex;
+             justify content: center;
+             margin-top: 20px;
+           }
+
+          video {
+              width: 45%;
+              margin: 10px;
+              border: 1px solid black;
+              border-radius: 5px;
+            }
+
+           button:hover {
+              background-color: #0056b3;
+           }
+
+            button {
+               margin-top: 20px;
+               padding: 10px 20px;
+               font-size: 16px;
+               cursor: pointer;
+               background-color: #007bff;
+               color: white;
+               border: none;
+               border-radius: 5px;
+             }
+          </style>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/strophe.js/3.0.0/strophe.min.js""></script>
+          <script>
+           document.addEventListener("DOMContentLoaded", () => {
+                let remoteStream;
+                let peerConnection;
+                const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+                const xmppServerUrl = "wss://yourdomain.com/xmpp-websocket";
+                const xmppUser = "user@yourdomain.com";
+                const xmppPassword = "badcompany";
+                const xmppDomain = "yourdomain.com";
+
+                const connection = new Strophe.Connection(XMPPServerUrl);
+
+                connection.connect(xmppUser, xmppPassword, onConnect);
+
+                function onConnect(status) {
+                   if (status === Strophe.Status.CONNECTED) {
+                       console.log("Connected to XMPP server");
+                       connection.addHandler(onMessage, null, "message", null, null, null);
+                     }
+                  }
+
+                 function onMessage(msg) {
+                      const from = msg.getAttribute("from");
+                      const body = msg.getElementsByTagName("body")[0];
+                      const message = JSON.parse(body.textContent);
+
+
+                      if (message.type === "offer") {
+                         handleOffer(message.sdp);
+                      } else if (message.type === "candidate") {
+                        handleCandidate(messsage.candidate);
+                      }
+
+                      return true;
+                  }
+
+
+                   async function handleOffer(sdp) {
+                       peerConnection = new RTCPeerConnection(servers);
+                       peerConnection.onicecandidate = handleICECandidateEvent;
+                       peerConnection.ontrack = handleTrackEvent;
+
+                       await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+                       const answer = await peerConnection.createAnswer();
+                       await peerConnection.setLocalDescription(answer);
+                       sendMessage({ type: "answer", sdp: peerConnection.localDescription });
+
+                       document.getElementById("endButton").disabled = false;
+                    }
+
+                    function handleCandidate(candidate) {
+                         const iceCandidate = new RTCIceCandidate(candidate);
+                         peerConnection.addIceCandidate(iceCandidate);
+                    }
+
+                    function handleTrackEvent(event) {
+                          if (!remoteStream) {
+                             remoteStream = new MediaStream();
+                             document.getElementById("remoteVideo").srcObject = remoteStream;
+                         }
+                         remoteStream.addTrack(event.track);
+                    }
+
+                    function handleICECandidateEvent(event) {
+                       if (event.candidate) {
+                           sendMessage({ type: "candidate", candidate: event.candidate });
+                         }
+                     }
+
+                    function endCall() {
+                        if (peerConnection) {
+                            peerConnection.close();
+                            connection.disconnect();
+                            document.getElementById("remoteVideo").srcObject = null;
+                           peerConnection = null;
+                            document.getElementById("endButton").disabled = true;
+                        }
+                    }
+
+                    function sendMessage(message) {
+                        const msg = $msg({ to: "peer@yourdomain.com", type:"chat" }).c("body").t(JSON.stringify(message));
+                        connection.send(msg);
+                   }
+
+
+                  document.getElementById("endButton").onclick = endCall;
+
+
+              });
+
+           </script>
+</head>
+<body>
+     <h1>webRTC Receiver</h1>
+     <div id="controls">
+             <button id="endButton" disabled>End Call</button>
+     </div>
+     <video id="remoteVideo" autoplay></video>
+
+</body>
+</html>
